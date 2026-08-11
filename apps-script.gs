@@ -32,7 +32,11 @@ function setup() {
 }
 
 // 주문서 페이지가 열릴 때 상품 목록을 내려줍니다.
-function doGet() {
+// ?action=lookup 으로 호출되면 주문 조회로 동작합니다.
+function doGet(e) {
+  if (e && e.parameter && e.parameter.action === 'lookup') {
+    return lookupOrders(e.parameter.ytname, e.parameter.phone);
+  }
   const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_PRODUCTS);
   const rows = sh.getDataRange().getValues();
   const products = {};
@@ -47,6 +51,43 @@ function doGet() {
     };
   }
   return ContentService.createTextOutput(JSON.stringify(products))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+// 내 주문 조회: 유튜브 닉네임 + 휴대전화 번호가 둘 다 일치하는 주문만 돌려줍니다.
+// 개인정보 보호를 위해 주소/배송메모는 절대 내려주지 않습니다.
+function lookupOrders(ytname, phone) {
+  const digits = function (s) { return String(s || '').replace(/\D/g, ''); };
+  const nick = String(ytname || '').trim();
+  const ph = digits(phone);
+  const out = { orders: [] };
+  if (!nick || ph.length < 10) {
+    return ContentService.createTextOutput(JSON.stringify(out))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_ORDERS);
+  const rows = sh.getDataRange().getValues();
+  // 열: 0주문시각 1유튜브닉네임 2수령인 3연락처 4주소 5배송메모 6배송지역 7입금자명
+  //     8상품번호 9상품명 10칼라 11사이즈 12수량 13금액 14입금할총액 15입금확인
+  let curStatus = '', curTotal = '';
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    if (r[14] !== '' && r[14] !== null) { // 주문의 첫 줄: 총액/상태가 적힌 줄
+      curTotal = r[14];
+      curStatus = String(r[15] || '대기');
+    }
+    if (String(r[1]).trim() === nick && digits(r[3]) === ph) {
+      out.orders.push({
+        date: String(r[0]),
+        item: '[' + r[8] + '] ' + r[9],
+        opt: r[10] + ' / ' + r[11] + ' / ' + r[12] + '개',
+        amount: Number(r[13]) || 0,
+        total: Number(curTotal) || 0,
+        status: curStatus || '대기',
+      });
+    }
+  }
+  return ContentService.createTextOutput(JSON.stringify(out))
     .setMimeType(ContentService.MimeType.JSON);
 }
 
