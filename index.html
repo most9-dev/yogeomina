@@ -298,9 +298,15 @@ function findProduct(){
     box.innerHTML = "상품번호를 찾을 수 없어요. 방송 화면의 번호를 다시 확인해 주세요.";
     $("opts").style.display = "none"; current = null; return;
   }
+  if(p.stock === 0){
+    box.className = "found show";
+    box.innerHTML = `<strong>[${no}] ${p.name}</strong> — 아쉽지만 품절됐어요 😢`;
+    $("opts").style.display = "none"; current = null; return;
+  }
   current = Object.assign({no: no}, p);
   box.className = "found show";
-  box.innerHTML = `<strong>[${no}] ${p.name}</strong> · <span class="price">${won(p.price)}</span>`;
+  box.innerHTML = `<strong>[${no}] ${p.name}</strong> · <span class="price">${won(p.price)}</span>`
+    + (p.stock !== undefined ? ` · 남은 수량 <b>${p.stock}개</b>` : "");
   fillSelect("color", "color-wrap", p.colors);
   fillSelect("size", "size-wrap", p.sizes);
   $("qty").value = 1;
@@ -316,11 +322,19 @@ function bump(d){
 }
 function addToCart(){
   if(!current) return;
+  const qty = Math.max(1, parseInt($("qty").value)||1);
+  if(current.stock !== undefined){
+    const inCart = cart.filter(it => it.no === current.no).reduce((s,it)=>s+it.qty, 0);
+    if(inCart + qty > current.stock){
+      $("found").innerHTML = `<strong>[${current.no}] ${current.name}</strong> — 남은 수량은 <b>${current.stock}개</b>예요. 담은 수량을 포함해 그 이상은 주문할 수 없어요.`;
+      return;
+    }
+  }
   cart.push({
     no: current.no, name: current.name, price: current.price,
     color: $("color-wrap").style.display === "none" ? "-" : $("color").value,
     size: $("size-wrap").style.display === "none" ? "-" : $("size").value,
-    qty: Math.max(1, parseInt($("qty").value)||1),
+    qty: qty,
   });
   current = null;
   $("pno").value = ""; $("found").className = "found"; $("opts").style.display = "none";
@@ -391,7 +405,13 @@ function submitOrder(){
   })
   .then(r => r.json())
   .then(res => {
-    if(!res.ok) throw new Error();
+    if(!res.ok){
+      if(res.error === "stock"){
+        err.textContent = `[${res.no}] 상품의 남은 수량이 ${res.remaining}개뿐이에요. 주문 내역의 수량을 줄여주세요.`;
+        return;
+      }
+      throw new Error();
+    }
     $("done-name").textContent = payload.ytname;
     $("done-amount").textContent = won(payload.total);
     $("form-view").className = "hide";

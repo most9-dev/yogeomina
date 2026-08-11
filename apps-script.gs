@@ -15,9 +15,9 @@ function setup() {
   let p = ss.getSheetByName(SHEET_PRODUCTS);
   if (!p) {
     p = ss.insertSheet(SHEET_PRODUCTS);
-    p.appendRow(['상품번호', '상품명', '가격', '칼라(쉼표로 구분)', '사이즈(쉼표로 구분)']);
-    p.appendRow(['101', '니트 가디건', 29000, '아이보리,블랙,핑크', 'Free']);
-    p.appendRow(['102', '와이드 팬츠', 24000, '베이지,차콜', 'S,M,L']);
+    p.appendRow(['상품번호', '상품명', '가격', '칼라(쉼표로 구분)', '사이즈(쉼표로 구분)', '재고(총수량)']);
+    p.appendRow(['101', '니트 가디건', 29000, '아이보리,블랙,핑크', 'Free', 10]);
+    p.appendRow(['102', '와이드 팬츠', 24000, '베이지,차콜', 'S,M,L', '']);
     p.setFrozenRows(1);
   }
 
@@ -37,21 +37,42 @@ function doGet(e) {
   if (e && e.parameter && e.parameter.action === 'lookup') {
     return lookupOrders(e.parameter.ytname, e.parameter.phone);
   }
-  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_PRODUCTS);
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sh = ss.getSheetByName(SHEET_PRODUCTS);
   const rows = sh.getDataRange().getValues();
+  const sold = soldByProduct(ss);
   const products = {};
   for (let i = 1; i < rows.length; i++) {
-    const [no, name, price, colors, sizes] = rows[i];
+    const [no, name, price, colors, sizes, stock] = rows[i];
     if (!no || !name) continue;
-    products[String(no).trim()] = {
+    const key = String(no).trim();
+    const p = {
       name: String(name).trim(),
       price: Number(price) || 0,
       colors: String(colors || '').split(',').map(s => s.trim()).filter(Boolean),
       sizes: String(sizes || '').split(',').map(s => s.trim()).filter(Boolean),
     };
+    // 재고 칸이 비어 있으면 무제한 판매, 숫자면 남은 수량 계산
+    if (stock !== '' && stock !== null && !isNaN(Number(stock))) {
+      p.stock = Math.max(0, Number(stock) - (sold[key] || 0));
+    }
+    products[key] = p;
   }
   return ContentService.createTextOutput(JSON.stringify(products))
     .setMimeType(ContentService.MimeType.JSON);
+}
+
+// [주문접수]에 쌓인 주문에서 상품번호별 판매 수량을 합산합니다.
+function soldByProduct(ss) {
+  const sh = ss.getSheetByName(SHEET_ORDERS);
+  const rows = sh.getDataRange().getValues();
+  const sold = {};
+  for (let i = 1; i < rows.length; i++) {
+    const no = String(rows[i][8] || '').trim();
+    const qty = Number(rows[i][12]) || 0;
+    if (no) sold[no] = (sold[no] || 0) + qty;
+  }
+  return sold;
 }
 
 // 내 주문 조회: 유튜브 닉네임 + 휴대전화 번호가 둘 다 일치하는 주문만 돌려줍니다.
@@ -91,22 +112,56 @@ function lookupOrders(ytname, phone) {
     .setMimeType(ContentService.MimeType.JSON);
 }
 
-// 고객이 주문서를 제출하면 [주문접수] 탭에 한 줄씩 기록합니다.
+// 고객이 주문서를 제출하면 재고를 확인한 뒤 [주문접수] 탭에 한 줄씩 기록합니다.
+// 동시에 여러 명이 주문해도 재고가 초과되지 않도록 잠금(Lock)을 사용합니다.
 function doPost(e) {
-  const data = JSON.parse(e.postData.contents);
-  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_ORDERS);
-  const now = Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd HH:mm:ss');
-  data.items.forEach(function (it, idx) {
-    sh.appendRow([
-      now,
-      data.ytname, data.name, data.phone, data.address,
-      data.memo || '', data.region || '일반',
-      data.payer || data.ytname,
-      it.no, it.name, it.color, it.size, it.qty, it.price * it.qty,
-      idx === 0 ? data.total : '',
-      idx === 0 ? '대기' : '',
-    ]);
-  });
-  return ContentService.createTextOutput(JSON.stringify({ ok: true }))
-    .setMimeType(ContentService.MimeType.JSON);
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const data = JSON.parse(e.postData.contents);
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+    // 재고 확인 (재고 칸이 숫자인 상품만)
+    const prows = ss.getSheetByName(SHEET_PRODUCTS).getDataRange().getValues();
+    const stockMap = {};
+    for (let i = 1; i < prows.length; i++) {
+      const no = String(prows[i][0] || '').trim();
+      const st = prows[i][5];
+      if (no && st !== '' && st !== null && !isNaN(Number(st))) stockMap[no] = Number(st);
+    }
+    const sold = soldByProduct(ss);
+    const want = {};
+    data.items.forEach(function (it) {
+      const no = String(it.no).trim();
+      want[no] = (want[no] || 0) + (Number(it.qty) || 0);
+    });
+    for (const no in want) {
+      if (no in stockMap) {
+        const remain = Math.max(0, stockMap[no] - (sold[no] || 0));
+        if (want[no] > remain) {
+          return ContentService.createTextOutput(JSON.stringify({
+            ok: false, error: 'stock', no: no, remaining: remain,
+          })).setMimeType(ContentService.MimeType.JSON);
+        }
+      }
+    }
+
+    const sh = ss.getSheetByName(SHEET_ORDERS);
+    const now = Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd HH:mm:ss');
+    data.items.forEach(function (it, idx) {
+      sh.appendRow([
+        now,
+        data.ytname, data.name, data.phone, data.address,
+        data.memo || '', data.region || '일반',
+        data.payer || data.ytname,
+        it.no, it.name, it.color, it.size, it.qty, it.price * it.qty,
+        idx === 0 ? data.total : '',
+        idx === 0 ? '대기' : '',
+      ]);
+    });
+    return ContentService.createTextOutput(JSON.stringify({ ok: true }))
+      .setMimeType(ContentService.MimeType.JSON);
+  } finally {
+    lock.releaseLock();
+  }
 }
