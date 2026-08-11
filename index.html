@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>요거미나 주문서</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Gaegu:wght@700&display=swap" rel="stylesheet">
+<script>
+// ============================================================
+// ★ 여기만 수정하면 됩니다 ★
+// ============================================================
+const CONFIG = {
+  SHOP_NAME: "요거미나",
+  SCRIPT_URL: "여기에_APPS_SCRIPT_웹앱_URL",  // Apps Script 배포 URL (설치가이드 ③)
+  BANK: "○○은행 000-0000-0000 (예금주명)",   // 입금 계좌
+  KAKAO_CHANNEL_URL: "https://pf.kakao.com/_xxxxx/chat", // 카톡 채널 채팅 링크
+  SHIP_FEE: 4000,        // 일반 배송료
+  SHIP_FEE_ISLAND: 7000, // 제주/도서산간 배송료
+};
+// ============================================================
+</script>
+<style>
+:root{
+  --accent:#C13E36; --accent-deep:#A32F28; --accent-soft:#F5E3DA;
+  --ink:#262019; --ink-sub:#8A7D6B; --line:#E5DCC9;
+  --ground:#F4EDE1; --card:#FFFDF7; --field:#FBF7EE;
+  --ok:#4C7A43; --ok-soft:#E8EEDF;
+  --hand:'Gaegu',"Apple SD Gothic Neo",sans-serif;
+}
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--ground); color:var(--ink);
+  font-family:"Apple SD Gothic Neo","Pretendard","Noto Sans KR","Malgun Gothic",-apple-system,sans-serif;
+  line-height:1.55; -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:440px; margin:0 auto; padding:0 16px 48px}
+header.hero{margin:0 -16px; padding:40px 20px 30px; text-align:center; background:var(--ground)}
+.hero h1{
+  margin:0; font-family:var(--hand); font-size:44px; font-weight:700;
+  letter-spacing:.01em; line-height:1.15;
+}
+.hero p{
+  margin:8px 0 0; font-family:var(--hand); font-size:22px; font-weight:700;
+  color:var(--accent);
+}
+section.card{
+  background:var(--card); border:1px solid var(--line); border-radius:14px;
+  padding:20px 18px; margin-top:16px;
+}
+h2{margin:0 0 14px; font-size:16px; font-weight:800}
+h2 .step{
+  display:inline-flex; align-items:center; justify-content:center;
+  width:22px; height:22px; margin-right:8px; border-radius:50%;
+  background:var(--ink); color:var(--card); font-size:12.5px; vertical-align:-3px;
+}
+label{display:block; font-size:13px; font-weight:700; color:var(--ink-sub); margin:14px 0 6px}
+label .req{color:var(--accent)}
+input,select,textarea{
+  width:100%; padding:12px 13px; font-size:15px; font-family:inherit; color:var(--ink);
+  background:var(--field); border:1.5px solid var(--line); border-radius:10px;
+}
+input:focus,select:focus,textarea:focus,button:focus-visible{
+  outline:2px solid var(--accent); outline-offset:1px; border-color:var(--accent);
+}
+.hint{font-size:12.5px; color:var(--ink-sub); margin:6px 0 0}
+.hint.red{color:var(--accent)}
+.row{display:flex; gap:8px}
+.row > .grow{flex:1}
+button{font-family:inherit; cursor:pointer; border:none; border-radius:10px; font-size:15px; font-weight:700}
+button:disabled{opacity:.55; cursor:default}
+.btn-accent{background:var(--ink); color:var(--card); padding:12px 18px}
+.btn-accent:active{background:#000}
+.btn-red{background:var(--accent); color:#fff}
+.btn-red:active{background:var(--accent-deep)}
+.btn-wide{width:100%; padding:14px; font-size:16px; margin-top:18px}
+.btn-ghost{background:var(--accent-soft); color:var(--accent-deep); padding:12px 16px}
+a.btn-red{display:block; text-align:center; text-decoration:none; padding:12px 18px}
+.found{
+  display:none; margin-top:14px; padding:12px 14px; border-radius:10px;
+  background:var(--accent-soft); font-size:14px;
+}
+.found.show{display:block}
+.found .price{color:var(--accent-deep); font-weight:800; font-variant-numeric:tabular-nums}
+.qty{display:flex; align-items:center; gap:8px}
+.qty button{width:44px; height:44px; font-size:20px; background:var(--accent-soft); color:var(--accent-deep); border-radius:10px}
+.qty input{text-align:center; font-variant-numeric:tabular-nums; max-width:90px}
+.cart-empty{color:var(--ink-sub); font-size:14px; text-align:center; padding:10px 0}
+ul.cart{list-style:none; margin:0; padding:0}
+ul.cart li{display:flex; align-items:center; gap:10px; padding:11px 0; border-bottom:1px solid var(--line); font-size:14px}
+ul.cart li .info{flex:1}
+ul.cart li .opt{color:var(--ink-sub); font-size:12.5px}
+ul.cart li .amt{font-weight:700; font-variant-numeric:tabular-nums; white-space:nowrap}
+ul.cart li button{background:none; color:var(--ink-sub); font-size:18px; padding:4px 6px; line-height:1}
+.totals{margin-top:12px; font-size:14px}
+.totals .tr{display:flex; justify-content:space-between; padding:3px 0}
+.totals .tr span:last-child{font-variant-numeric:tabular-nums}
+.totals .grand{margin-top:8px; padding-top:10px; border-top:1.5px solid var(--line); font-size:16px; font-weight:800}
+.totals .grand span:last-child{color:var(--accent-deep)}
+.ship-check{display:flex; align-items:center; gap:8px; margin-top:12px; font-size:13.5px; color:var(--ink-sub)}
+.ship-check input{width:auto}
+.notice{
+  margin-top:16px; padding:14px 16px; border-radius:12px; background:var(--card);
+  border:1px dashed var(--line); font-size:13px; color:var(--ink-sub);
+}
+.notice b{color:var(--ink)}
+.loading,.load-error{text-align:center; padding:30px 0; color:var(--ink-sub); font-size:14px}
+.load-error{color:var(--accent-deep)}
+#done{display:none}
+#done.show{display:block}
+#form-view.hide{display:none}
+.done-card{text-align:center; padding:34px 20px 26px}
+.check{
+  width:70px; height:70px; margin:0 auto 16px; border-radius:50%;
+  background:var(--ok); color:#fff; font-size:34px;
+  display:flex; align-items:center; justify-content:center;
+}
+.done-card h2{font-size:21px; margin-bottom:6px}
+.done-card p{margin:0; color:var(--ink-sub); font-size:14px}
+.paybox{margin:20px 0 0; padding:18px; border-radius:12px; background:var(--ok-soft)}
+.paybox .lab{font-size:13px; color:var(--ink-sub); font-weight:700}
+.paybox .amount{font-size:32px; font-weight:800; color:var(--ok); font-variant-numeric:tabular-nums}
+.paybox .acct{margin-top:10px; font-size:14.5px; font-weight:700}
+.paybox .sub{font-size:12.5px; color:var(--ink-sub); margin-top:4px}
+.done-actions{display:flex; flex-direction:column; gap:9px; margin-top:20px}
+@media (prefers-reduced-motion: no-preference){
+  .found.show,#done.show{animation:pop .25s ease}
+  @keyframes pop{from{opacity:0; transform:translateY(6px)}to{opacity:1; transform:none}}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="hero">
+    <h1><span id="shop-name"></span> 주문서</h1>
+    <p>*계좌이체시 유튜브 닉네임 필수</p>
+  </header>
+
+  <div class="loading" id="loading">상품 목록을 불러오는 중이에요…</div>
+  <div class="load-error" id="load-error" style="display:none">
+    상품 목록을 불러오지 못했어요.<br>잠시 후 새로고침해 주세요.
+  </div>
+
+  <div id="form-view" style="display:none">
+    <section class="card">
+      <h2><span class="step">1</span>상품 담기</h2>
+      <label for="pno">상품번호 <span class="req">*</span></label>
+      <div class="row">
+        <div class="grow"><input id="pno" inputmode="numeric" placeholder="예: 101" aria-label="상품번호"></div>
+        <button class="btn-accent" onclick="findProduct()">검색</button>
+      </div>
+      <div class="found" id="found" role="status"></div>
+      <div id="opts" style="display:none">
+        <div id="color-wrap"><label for="color">칼라</label><select id="color"></select></div>
+        <div id="size-wrap"><label for="size">사이즈</label><select id="size"></select></div>
+        <label>수량</label>
+        <div class="qty">
+          <button type="button" aria-label="수량 줄이기" onclick="bump(-1)">−</button>
+          <input id="qty" value="1" inputmode="numeric" aria-label="수량">
+          <button type="button" aria-label="수량 늘리기" onclick="bump(1)">+</button>
+        </div>
+        <button class="btn-accent btn-wide" onclick="addToCart()">🛒 담기</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2><span class="step">2</span>주문 내역</h2>
+      <div id="cart-box"><p class="cart-empty">아직 담은 상품이 없어요</p></div>
+      <label for="region" style="margin-top:16px">배송 지역</label>
+      <select id="region" onchange="renderCart()">
+        <option value="normal">일반 지역 (배송료 4,000원)</option>
+        <option value="island">제주/도서산간 (배송료 7,000원)</option>
+      </select>
+      <label class="ship-check">
+        <input type="checkbox" id="ship-paid" onchange="renderCart()">
+        오늘 라이브에서 이미 배송료를 낸 추가 주문이에요
+      </label>
+      <div class="totals" id="totals" style="display:none">
+        <div class="tr"><span>상품 합계</span><span id="t-items"></span></div>
+        <div class="tr"><span>배송료</span><span id="t-ship"></span></div>
+        <div class="tr grand"><span>입금하실 금액</span><span id="t-grand"></span></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2><span class="step">3</span>주문자 정보</h2>
+      <label for="ytname">유튜브 닉네임 <span class="req">*</span></label>
+      <input id="ytname" placeholder="유튜브에서 쓰는 닉네임">
+      <p class="hint red">*계좌이체 확인에 꼭 필요해요</p>
+      <label for="name">수령인 성함 <span class="req">*</span></label>
+      <input id="name" placeholder="받으실 분 성함" autocomplete="name">
+      <label for="phone">연락처 <span class="req">*</span></label>
+      <input id="phone" inputmode="tel" placeholder="010-0000-0000" autocomplete="tel">
+      <label for="addr">배송지 주소 <span class="req">*</span></label>
+      <textarea id="addr" rows="2" placeholder="도로명 주소 + 상세 주소"></textarea>
+      <label for="memo">배송 메모</label>
+      <input id="memo" placeholder="예: 문 앞에 놓아주세요 (선택)">
+      <label for="payer">입금자명</label>
+      <input id="payer" placeholder="유튜브 닉네임과 다른 이름으로 입금할 경우만 입력">
+      <button class="btn-red btn-wide" id="submit-btn" onclick="submitOrder()">주문서 제출하기</button>
+      <p class="hint" id="err" style="color:var(--accent-deep)"></p>
+    </section>
+
+    <div class="notice">
+      <b>안내</b> · 입금 확인은 라이브 종료 후 순차 진행됩니다 · 배송은 방송 이틀 뒤 시작됩니다 · 배송료는 라이브 중 여러 번 주문해도 1회만 결제
+    </div>
+  </div>
+
+  <div id="done">
+    <section class="card done-card">
+      <div class="check">✓</div>
+      <h2>주문이 완료되었습니다</h2>
+      <p><span id="done-name"></span>님의 주문이 정상 접수되었어요.</p>
+      <div class="paybox">
+        <div class="lab">이번 주문 입금금액</div>
+        <div class="amount" id="done-amount"></div>
+        <div class="acct" id="done-bank"></div>
+        <div class="sub">입금자명은 유튜브 닉네임과 같게 해주시면 확인이 빨라요</div>
+      </div>
+      <div class="done-actions">
+        <a class="btn-red" id="channel-link" href="#">💬 채널톡 바로가기</a>
+        <button class="btn-ghost" onclick="resetForm()">추가 주문하기</button>
+      </div>
+    </section>
+  </div>
+</div>
+
+<script>
+let PRODUCTS = {}, current = null, cart = [];
+const won = n => n.toLocaleString("ko-KR") + "원";
+const $ = id => document.getElementById(id);
+
+document.title = CONFIG.SHOP_NAME + " 주문서";
+$("shop-name").textContent = CONFIG.SHOP_NAME;
+$("done-bank").textContent = CONFIG.BANK;
+$("channel-link").href = CONFIG.KAKAO_CHANNEL_URL;
+
+// SCRIPT_URL이 아직 연결 전이면 샘플 상품으로 미리보기 동작
+const SAMPLE_PRODUCTS = {
+  "101":{name:"니트 가디건", price:29000, colors:["아이보리","블랙","핑크"], sizes:["Free"]},
+  "102":{name:"와이드 팬츠", price:24000, colors:["베이지","차콜"], sizes:["S","M","L"]},
+  "103":{name:"셔링 블라우스", price:19000, colors:["화이트","라벤더"], sizes:["Free"]},
+  "104":{name:"롱 원피스", price:35000, colors:["네이비","와인"], sizes:["S","M"]},
+};
+const IS_PREVIEW = CONFIG.SCRIPT_URL.indexOf("http") !== 0;
+if(IS_PREVIEW){
+  PRODUCTS = SAMPLE_PRODUCTS;
+  $("loading").style.display = "none";
+  $("form-view").style.display = "block";
+} else {
+  fetch(CONFIG.SCRIPT_URL)
+    .then(r => r.json())
+    .then(data => {
+      PRODUCTS = data;
+      $("loading").style.display = "none";
+      $("form-view").style.display = "block";
+    })
+    .catch(() => {
+      $("loading").style.display = "none";
+      $("load-error").style.display = "block";
+    });
+}
+
+function findProduct(){
+  const no = $("pno").value.trim();
+  const p = PRODUCTS[no];
+  const box = $("found");
+  if(!p){
+    box.className = "found show";
+    box.innerHTML = "상품번호를 찾을 수 없어요. 방송 화면의 번호를 다시 확인해 주세요.";
+    $("opts").style.display = "none"; current = null; return;
+  }
+  current = Object.assign({no: no}, p);
+  box.className = "found show";
+  box.innerHTML = `<strong>[${no}] ${p.name}</strong> · <span class="price">${won(p.price)}</span>`;
+  fillSelect("color", "color-wrap", p.colors);
+  fillSelect("size", "size-wrap", p.sizes);
+  $("qty").value = 1;
+  $("opts").style.display = "block";
+}
+function fillSelect(id, wrapId, list){
+  const has = list && list.length > 0;
+  $(wrapId).style.display = has ? "block" : "none";
+  $(id).innerHTML = has ? list.map(v => `<option>${v}</option>`).join("") : "<option>-</option>";
+}
+function bump(d){
+  $("qty").value = Math.max(1, Math.min(99, (parseInt($("qty").value)||1) + d));
+}
+function addToCart(){
+  if(!current) return;
+  cart.push({
+    no: current.no, name: current.name, price: current.price,
+    color: $("color-wrap").style.display === "none" ? "-" : $("color").value,
+    size: $("size-wrap").style.display === "none" ? "-" : $("size").value,
+    qty: Math.max(1, parseInt($("qty").value)||1),
+  });
+  current = null;
+  $("pno").value = ""; $("found").className = "found"; $("opts").style.display = "none";
+  renderCart();
+}
+function removeItem(i){ cart.splice(i,1); renderCart(); }
+function itemsTotal(){ return cart.reduce((s,it)=>s+it.price*it.qty, 0); }
+function shipFee(){
+  if($("ship-paid").checked) return 0;
+  return $("region").value === "island" ? CONFIG.SHIP_FEE_ISLAND : CONFIG.SHIP_FEE;
+}
+function grandTotal(){ return itemsTotal() + shipFee(); }
+function renderCart(){
+  const box = $("cart-box");
+  if(!cart.length){
+    box.innerHTML = '<p class="cart-empty">아직 담은 상품이 없어요</p>';
+    $("totals").style.display = "none"; return;
+  }
+  box.innerHTML = '<ul class="cart">' + cart.map((it,i)=>`
+    <li>
+      <div class="info"><b>[${it.no}] ${it.name}</b><br>
+        <span class="opt">${it.color} / ${it.size} / ${it.qty}개</span></div>
+      <span class="amt">${won(it.price*it.qty)}</span>
+      <button aria-label="삭제" onclick="removeItem(${i})">✕</button>
+    </li>`).join("") + "</ul>";
+  $("t-items").textContent = won(itemsTotal());
+  $("t-ship").textContent = won(shipFee());
+  $("t-grand").textContent = won(grandTotal());
+  $("totals").style.display = "block";
+}
+function submitOrder(){
+  const err = $("err");
+  if(!cart.length){ err.textContent = "상품을 먼저 담아주세요."; return; }
+  if(!$("ytname").value.trim()){ err.textContent = "유튜브 닉네임은 꼭 입력해 주세요 (입금 확인용)."; return; }
+  if(!$("name").value.trim() || !$("phone").value.trim() || !$("addr").value.trim()){
+    err.textContent = "수령인 성함·연락처·주소는 꼭 입력해 주세요."; return;
+  }
+  err.textContent = "";
+  const btn = $("submit-btn");
+  btn.disabled = true; btn.textContent = "접수 중이에요…";
+  if(IS_PREVIEW){
+    $("done-name").textContent = $("ytname").value.trim();
+    $("done-amount").textContent = won(grandTotal());
+    $("form-view").className = "hide";
+    $("done").className = "show";
+    window.scrollTo({top:0});
+    btn.disabled = false; btn.textContent = "주문서 제출하기";
+    return;
+  }
+  const payload = {
+    ytname: $("ytname").value.trim(),
+    name: $("name").value.trim(),
+    phone: $("phone").value.trim(),
+    address: $("addr").value.trim(),
+    memo: $("memo").value.trim(),
+    payer: $("payer").value.trim(),
+    region: $("region").value === "island" ? "제주/도서산간" : "일반",
+    items: cart,
+    total: grandTotal(),
+  };
+  fetch(CONFIG.SCRIPT_URL, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body: JSON.stringify(payload),
+  })
+  .then(r => r.json())
+  .then(res => {
+    if(!res.ok) throw new Error();
+    $("done-name").textContent = payload.ytname;
+    $("done-amount").textContent = won(payload.total);
+    $("form-view").className = "hide";
+    $("done").className = "show";
+    window.scrollTo({top:0});
+  })
+  .catch(() => {
+    err.textContent = "접수에 실패했어요. 잠시 후 다시 시도해 주세요.";
+  })
+  .finally(() => {
+    btn.disabled = false; btn.textContent = "주문서 제출하기";
+  });
+}
+function resetForm(){
+  cart = []; renderCart();
+  $("ship-paid").checked = true; renderCart();
+  $("form-view").className = ""; $("done").className = "";
+  window.scrollTo({top:0});
+}
+</script>
+</body>
+</html>
