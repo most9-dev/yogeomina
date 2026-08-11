@@ -253,7 +253,7 @@ ul.lk li .amt{font-variant-numeric:tabular-nums; font-weight:700}
 </div>
 
 <script>
-let PRODUCTS = {}, current = null, cart = [];
+let PRODUCTS = {}, current = null, cart = [], productsLoaded = false;
 const won = n => n.toLocaleString("ko-KR") + "원";
 const $ = id => document.getElementById(id);
 
@@ -279,8 +279,9 @@ if(IS_PREVIEW){
     .then(r => r.json())
     .then(data => {
       PRODUCTS = data;
+      productsLoaded = true;
       $("loading").style.display = "none";
-      $("form-view").style.display = "block";
+      if($("lookup-view").style.display !== "block") $("form-view").style.display = "block";
     })
     .catch(() => {
       $("loading").style.display = "none";
@@ -434,14 +435,18 @@ function fmtDate(s){
 // ── 내 주문 조회 ──
 function showLookup(){
   $("form-view").style.display = "none";
+  $("loading").style.display = "none";
   $("lookup-view").style.display = "block";
   window.scrollTo({top:0});
 }
 function hideLookup(){
   $("lookup-view").style.display = "none";
-  $("form-view").style.display = "block";
+  if(productsLoaded) $("form-view").style.display = "block";
+  else $("loading").style.display = "block";
   window.scrollTo({top:0});
 }
+// 링크에 #lookup이 붙어 있으면 조회 화면으로 바로 열기
+if(location.hash === "#lookup") showLookup();
 function lookupOrders(){
   const nick = $("lk-ytname").value.trim();
   const phone = $("lk-phone").value.trim();
