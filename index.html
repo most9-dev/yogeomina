@@ -13,7 +13,7 @@
 // ============================================================
 const CONFIG = {
   SHOP_NAME: "요거미나",
-  SCRIPT_URL: "https://script.google.com/macros/s/AKfycbxkcVZ2wS_xyrRHRshtr2Siw1SpyxW3C2L_ejf-gHw4hf-yL6IqPxxaJW4kHyK5I9GmXg/exec",
+  SCRIPT_URL: "https://script.google.com/macros/s/AKfycbzCa6bBfNLc5SwjKo7FNJ3ULxm7DyG98r5WZAW69E_XtYhMzv9A0r_Cngv9VFZcxLTa/exec",
   BANK: "○○은행 000-0000-0000 (예금주명)",   // 입금 계좌
   KAKAO_CHANNEL_URL: "https://pf.kakao.com/_xxxxx/chat", // 카톡 채널 채팅 링크
   SHIP_FEE: 4000,        // 일반 배송료
@@ -424,6 +424,12 @@ function formatPhone(el){
 formatPhone($("phone"));
 formatPhone($("lk-phone"));
 function isValidPhone(v){ return /^010-\d{4}-\d{4}$/.test(v); }
+function fmtDate(s){
+  const d = new Date(String(s).replace(/\s*\(.*\)$/, ""));
+  if(isNaN(d)) return s;
+  return (d.getMonth()+1) + "/" + d.getDate() + " " +
+         String(d.getHours()).padStart(2,"0") + ":" + String(d.getMinutes()).padStart(2,"0");
+}
 
 // ── 내 주문 조회 ──
 function showLookup(){
@@ -459,7 +465,7 @@ function lookupOrders(){
           ${o.status === "완료"
             ? '<span class="badge done">입금확인 완료 ✓</span>'
             : '<span class="badge wait">입금 대기</span>'}<br>
-          <span class="opt">${o.opt} · ${o.date}</span><br>
+          <span class="opt">${o.opt} · ${fmtDate(o.date)}</span><br>
           <span class="amt">${won(o.amount)}</span>
         </li>`).join("") + "</ul>" +
         `<p class="lk-total">입금 확인은 라이브 종료 후 순차 진행됩니다.</p>`;
