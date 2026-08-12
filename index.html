@@ -306,16 +306,44 @@ function findProduct(){
   current = Object.assign({no: no}, p);
   box.className = "found show";
   box.innerHTML = `<strong>[${no}] ${p.name}</strong> · <span class="price">${won(p.price)}</span>`
-    + (p.stock !== undefined ? ` · 남은 수량 <b>${p.stock}개</b>` : "");
-  fillSelect("color", "color-wrap", p.colors);
-  fillSelect("size", "size-wrap", p.sizes);
+    + (p.stock !== undefined && !p.stockBy ? ` · 남은 수량 <b>${p.stock}개</b>` : "");
+  fillSelect("color", "color-wrap", p.colors, p.stockBy === "color" ? p.stockList : null);
+  fillSelect("size", "size-wrap", p.sizes, p.stockBy === "size" ? p.stockList : null);
   $("qty").value = 1;
   $("opts").style.display = "block";
 }
-function fillSelect(id, wrapId, list){
+function fillSelect(id, wrapId, list, stockList){
   const has = list && list.length > 0;
   $(wrapId).style.display = has ? "block" : "none";
-  $(id).innerHTML = has ? list.map(v => `<option>${v}</option>`).join("") : "<option>-</option>";
+  if(!has){ $(id).innerHTML = "<option>-</option>"; return; }
+  $(id).innerHTML = list.map((v,i) => {
+    if(!stockList) return `<option value="${v}">${v}</option>`;
+    return stockList[i] > 0
+      ? `<option value="${v}">${v} (${stockList[i]}개 남음)</option>`
+      : `<option value="${v}" disabled>${v} (품절)</option>`;
+  }).join("");
+  if(stockList){ // 품절이 아닌 첫 옵션을 기본 선택
+    const first = list.findIndex((_,i) => stockList[i] > 0);
+    if(first >= 0) $(id).selectedIndex = first;
+  }
+}
+// 선택한 옵션 기준 남은 수량 (장바구니에 담아둔 수량 차감)
+function remainingFor(p, no, color, size){
+  if(p.stockBy){
+    const opt = p.stockBy === "color" ? color : size;
+    const list = p.stockBy === "color" ? p.colors : p.sizes;
+    const idx = list.indexOf(opt);
+    const base = idx >= 0 ? p.stockList[idx] : 0;
+    const inCart = cart.filter(it => it.no === no &&
+      (p.stockBy === "color" ? it.color === opt : it.size === opt))
+      .reduce((s,it)=>s+it.qty, 0);
+    return {remain: base - inCart, label: opt + " 옵션"};
+  }
+  if(p.stock !== undefined){
+    const inCart = cart.filter(it => it.no === no).reduce((s,it)=>s+it.qty, 0);
+    return {remain: p.stock - inCart, label: "상품"};
+  }
+  return {remain: Infinity};
 }
 function bump(d){
   $("qty").value = Math.max(1, Math.min(99, (parseInt($("qty").value)||1) + d));
@@ -323,18 +351,16 @@ function bump(d){
 function addToCart(){
   if(!current) return;
   const qty = Math.max(1, parseInt($("qty").value)||1);
-  if(current.stock !== undefined){
-    const inCart = cart.filter(it => it.no === current.no).reduce((s,it)=>s+it.qty, 0);
-    if(inCart + qty > current.stock){
-      $("found").innerHTML = `<strong>[${current.no}] ${current.name}</strong> — 남은 수량은 <b>${current.stock}개</b>예요. 담은 수량을 포함해 그 이상은 주문할 수 없어요.`;
-      return;
-    }
+  const color = $("color-wrap").style.display === "none" ? "-" : $("color").value;
+  const size = $("size-wrap").style.display === "none" ? "-" : $("size").value;
+  const rf = remainingFor(current, current.no, color, size);
+  if(qty > rf.remain){
+    $("found").innerHTML = `<strong>[${current.no}] ${current.name}</strong> — ${rf.label}의 남은 수량은 <b>${Math.max(0,rf.remain)}개</b>예요 (담은 수량 포함). 그 이상은 주문할 수 없어요.`;
+    return;
   }
   cart.push({
     no: current.no, name: current.name, price: current.price,
-    color: $("color-wrap").style.display === "none" ? "-" : $("color").value,
-    size: $("size-wrap").style.display === "none" ? "-" : $("size").value,
-    qty: qty,
+    color: color, size: size, qty: qty,
   });
   current = null;
   $("pno").value = ""; $("found").className = "found"; $("opts").style.display = "none";
@@ -407,7 +433,7 @@ function submitOrder(){
   .then(res => {
     if(!res.ok){
       if(res.error === "stock"){
-        err.textContent = `[${res.no}] 상품의 남은 수량이 ${res.remaining}개뿐이에요. 주문 내역의 수량을 줄여주세요.`;
+        err.textContent = `[${res.no}] ${res.option ? res.option + " 옵션" : "상품"}의 남은 수량이 ${res.remaining}개뿐이에요. 주문 내역의 수량을 줄여주세요.`;
         return;
       }
       throw new Error();

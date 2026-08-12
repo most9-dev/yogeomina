@@ -52,9 +52,20 @@ function doGet(e) {
       colors: String(colors || '').split(',').map(s => s.trim()).filter(Boolean),
       sizes: String(sizes || '').split(',').map(s => s.trim()).filter(Boolean),
     };
-    // 재고 칸이 비어 있으면 무제한 판매, 숫자면 남은 수량 계산
-    if (stock !== '' && stock !== null && !isNaN(Number(stock))) {
-      p.stock = Math.max(0, Number(stock) - (sold[key] || 0));
+    // 재고 계산: 빈칸=무제한, 숫자 하나=상품 전체, 쉼표 목록=옵션별(칼라 또는 사이즈 순서)
+    const st = parseStock(stock, p.colors, p.sizes);
+    if (st) {
+      if (st.by === 'total') {
+        p.stock = Math.max(0, st.total - (sold.total[key] || 0));
+      } else {
+        const opts = st.by === 'color' ? p.colors : p.sizes;
+        const soldMap = st.by === 'color' ? sold.byColor : sold.bySize;
+        p.stockBy = st.by;
+        p.stockList = opts.map(function (o, idx) {
+          return Math.max(0, st.list[idx] - (soldMap[key + '|' + o] || 0));
+        });
+        p.stock = p.stockList.reduce(function (a, b) { return a + b; }, 0);
+      }
     }
     products[key] = p;
   }
@@ -62,15 +73,36 @@ function doGet(e) {
     .setMimeType(ContentService.MimeType.JSON);
 }
 
-// [주문접수]에 쌓인 주문에서 상품번호별 판매 수량을 합산합니다.
+// 재고 칸 해석: '' → null(무제한) / '10' → 전체 10개 / '3,5,2' → 옵션 순서별
+function parseStock(stock, colors, sizes) {
+  const s = String(stock === null || stock === undefined ? '' : stock).trim();
+  if (s === '') return null;
+  if (s.indexOf(',') === -1) {
+    const n = Number(s);
+    return isNaN(n) ? null : { by: 'total', total: n };
+  }
+  const list = s.split(',').map(function (x) { return Number(String(x).trim()); });
+  if (list.some(function (n) { return isNaN(n); })) return null;
+  if (colors.length === list.length) return { by: 'color', list: list };
+  if (sizes.length === list.length) return { by: 'size', list: list };
+  // 옵션 개수와 안 맞으면 합계를 전체 재고로 취급
+  return { by: 'total', total: list.reduce(function (a, b) { return a + b; }, 0) };
+}
+
+// [주문접수]에 쌓인 주문에서 상품별/옵션별 판매 수량을 합산합니다.
 function soldByProduct(ss) {
   const sh = ss.getSheetByName(SHEET_ORDERS);
   const rows = sh.getDataRange().getValues();
-  const sold = {};
+  const sold = { total: {}, byColor: {}, bySize: {} };
   for (let i = 1; i < rows.length; i++) {
     const no = String(rows[i][8] || '').trim();
+    if (!no) continue;
+    const color = String(rows[i][10] || '').trim();
+    const size = String(rows[i][11] || '').trim();
     const qty = Number(rows[i][12]) || 0;
-    if (no) sold[no] = (sold[no] || 0) + qty;
+    sold.total[no] = (sold.total[no] || 0) + qty;
+    sold.byColor[no + '|' + color] = (sold.byColor[no + '|' + color] || 0) + qty;
+    sold.bySize[no + '|' + size] = (sold.bySize[no + '|' + size] || 0) + qty;
   }
   return sold;
 }
@@ -121,27 +153,49 @@ function doPost(e) {
     const data = JSON.parse(e.postData.contents);
     const ss = SpreadsheetApp.getActiveSpreadsheet();
 
-    // 재고 확인 (재고 칸이 숫자인 상품만)
+    // 재고 확인 (상품 전체 재고 / 옵션별 재고 모두 검사)
     const prows = ss.getSheetByName(SHEET_PRODUCTS).getDataRange().getValues();
-    const stockMap = {};
+    const prodInfo = {};
     for (let i = 1; i < prows.length; i++) {
       const no = String(prows[i][0] || '').trim();
-      const st = prows[i][5];
-      if (no && st !== '' && st !== null && !isNaN(Number(st))) stockMap[no] = Number(st);
+      if (!no) continue;
+      const colors = String(prows[i][3] || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+      const sizes = String(prows[i][4] || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+      prodInfo[no] = { colors: colors, sizes: sizes, st: parseStock(prows[i][5], colors, sizes) };
     }
     const sold = soldByProduct(ss);
-    const want = {};
+    const wantTotal = {}, wantOpt = {};
     data.items.forEach(function (it) {
       const no = String(it.no).trim();
-      want[no] = (want[no] || 0) + (Number(it.qty) || 0);
+      const qty = Number(it.qty) || 0;
+      wantTotal[no] = (wantTotal[no] || 0) + qty;
+      wantOpt[no + '|C|' + String(it.color).trim()] = (wantOpt[no + '|C|' + String(it.color).trim()] || 0) + qty;
+      wantOpt[no + '|S|' + String(it.size).trim()] = (wantOpt[no + '|S|' + String(it.size).trim()] || 0) + qty;
     });
-    for (const no in want) {
-      if (no in stockMap) {
-        const remain = Math.max(0, stockMap[no] - (sold[no] || 0));
-        if (want[no] > remain) {
+    for (const no in wantTotal) {
+      const info = prodInfo[no];
+      if (!info || !info.st) continue;
+      const st = info.st;
+      if (st.by === 'total') {
+        const remain = Math.max(0, st.total - (sold.total[no] || 0));
+        if (wantTotal[no] > remain) {
           return ContentService.createTextOutput(JSON.stringify({
             ok: false, error: 'stock', no: no, remaining: remain,
           })).setMimeType(ContentService.MimeType.JSON);
+        }
+      } else {
+        const opts = st.by === 'color' ? info.colors : info.sizes;
+        const soldMap = st.by === 'color' ? sold.byColor : sold.bySize;
+        const dim = st.by === 'color' ? 'C' : 'S';
+        for (let j = 0; j < opts.length; j++) {
+          const wanted = wantOpt[no + '|' + dim + '|' + opts[j]] || 0;
+          if (!wanted) continue;
+          const remain = Math.max(0, st.list[j] - (soldMap[no + '|' + opts[j]] || 0));
+          if (wanted > remain) {
+            return ContentService.createTextOutput(JSON.stringify({
+              ok: false, error: 'stock', no: no, option: opts[j], remaining: remain,
+            })).setMimeType(ContentService.MimeType.JSON);
+          }
         }
       }
     }
