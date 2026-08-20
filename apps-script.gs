@@ -31,6 +31,23 @@ function setup() {
   }
 }
 
+// [상품목록]에 판매수량/남은재고 열을 자동으로 만들어 줍니다.
+// 실행하면 G열·H열에 수식이 채워지고, 이후 주문이 들어올 때마다 자동 갱신됩니다.
+// 상품 줄을 새로 추가한 뒤에는 이 함수를 한 번 더 실행해 주세요.
+function addStockColumns() {
+  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_PRODUCTS);
+  const last = sh.getLastRow();
+  sh.getRange('G1').setValue('판매수량');
+  sh.getRange('H1').setValue('남은재고');
+  for (let r = 2; r <= last; r++) {
+    if (sh.getRange('A' + r).getValue() === '') continue;
+    sh.getRange('G' + r).setFormula(
+      '=SUMPRODUCT((주문접수!$I$2:$I$1000&""=$A' + r + '&"")*주문접수!$M$2:$M$1000)');
+    sh.getRange('H' + r).setFormula(
+      '=IF($F' + r + '="","무제한",IFERROR($F' + r + '-$G' + r + ',"옵션별"))');
+  }
+}
+
 // 주문서 페이지가 열릴 때 상품 목록을 내려줍니다.
 // ?action=lookup 으로 호출되면 주문 조회로 동작합니다.
 function doGet(e) {
